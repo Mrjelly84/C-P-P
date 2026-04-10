@@ -3,11 +3,11 @@ using System.IO;
 
 namespace AssetGuard.Services
 {
-    public class logService
+    public class LogService
     {
         private readonly string logFilePath;
 
-        public logService(string logFilePath)
+        public LogService(string logFilePath)
         {
             this.logFilePath = logFilePath;
         }
