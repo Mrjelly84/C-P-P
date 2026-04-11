@@ -5,6 +5,9 @@ using Microsoft.Maui.Storage;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace AssetGuard
 {
@@ -35,6 +38,11 @@ namespace AssetGuard
         private Grid mainGrid;
         private Grid loginGrid;
 
+        // Secure storage keys
+        private const string KeyUsername = "cred_username";
+        private const string KeyPasswordHash = "cred_password_hash";
+        private const string KeySalt = "cred_salt";
+
         public MainPage()
         {
             SQLitePCL.Batteries.Init();
@@ -54,6 +62,9 @@ namespace AssetGuard
 
             foreach (var item in itemRepository.LoadItems())
                 Items.Add(item);
+
+            // Ensure credentials exist (create default if absent). Fire-and-forget is OK here; handle exceptions inside.
+            _ = EnsureDefaultCredentialsAsync();
         }
 
         [Obsolete]
@@ -118,20 +129,29 @@ namespace AssetGuard
             }
         }
 
-        private void OnLoginClicked(object sender, EventArgs e)
+        // Make login async and verify against securely stored hash+salt in SecureStorage
+        private async void OnLoginClicked(object sender, EventArgs e)
         {
-            const string validUsername = "admin";
-            const string validPassword = "password123";
+            try
+            {
+                var username = usernameEntry?.Text ?? string.Empty;
+                var password = passwordEntry?.Text ?? string.Empty;
 
-            if (usernameEntry.Text == validUsername && passwordEntry.Text == validPassword)
-            {
-                loginGrid.IsVisible = false;
-                mainGrid.IsVisible = true;
-                logService.LogAction($"User '{usernameEntry.Text}' logged in.");
+                var verified = await VerifyCredentialsAsync(username, password);
+                if (verified)
+                {
+                    loginGrid.IsVisible = false;
+                    mainGrid.IsVisible = true;
+                    logService.LogAction($"User '{username}' logged in.");
+                }
+                else
+                {
+                    await DisplayAlert("Error", "Invalid username or password.", "OK");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                DisplayAlert("Error", "Invalid username or password.", "OK");
+                await DisplayAlert("Error", $"Login failed: {ex.Message}", "OK");
             }
         }
 
@@ -156,6 +176,71 @@ namespace AssetGuard
             {
                 await DisplayAlert("Log File", "Log file not found.", "OK");
             }
+        }
+
+        // --- Credential helpers ---
+
+        private async Task EnsureDefaultCredentialsAsync()
+        {
+            try
+            {
+                var existing = await SecureStorage.GetAsync(KeyUsername);
+                if (string.IsNullOrEmpty(existing))
+                {
+                    // Create a safe default for first run. Change immediately in production.
+                    await CreateStoredCredentialsAsync("admin", "password123");
+                }
+            }
+            catch
+            {
+                // SecureStorage may throw on some emulators/unsupported platforms.
+                // Swallowing the exception keeps app usable; consider notifying or using a fallback storage.
+            }
+        }
+
+        // Creates and stores username, salted password hash in SecureStorage
+        private async Task CreateStoredCredentialsAsync(string username, string password)
+        {
+            var salt = RandomNumberGenerator.GetBytes(16);
+            var hash = HashPassword(password, salt);
+
+            await SecureStorage.SetAsync(KeyUsername, username);
+            await SecureStorage.SetAsync(KeyPasswordHash, Convert.ToBase64String(hash));
+            await SecureStorage.SetAsync(KeySalt, Convert.ToBase64String(salt));
+        }
+
+        // Verifies credentials by recomputing hash from stored salt and comparing in constant time.
+        private async Task<bool> VerifyCredentialsAsync(string username, string password)
+        {
+            try
+            {
+                var storedUser = await SecureStorage.GetAsync(KeyUsername);
+                if (string.IsNullOrEmpty(storedUser) || storedUser != username)
+                    return false;
+
+                var storedHashB64 = await SecureStorage.GetAsync(KeyPasswordHash);
+                var storedSaltB64 = await SecureStorage.GetAsync(KeySalt);
+                if (string.IsNullOrEmpty(storedHashB64) || string.IsNullOrEmpty(storedSaltB64))
+                    return false;
+
+                var salt = Convert.FromBase64String(storedSaltB64);
+                var expectedHash = Convert.FromBase64String(storedHashB64);
+                var computedHash = HashPassword(password, salt);
+
+                return CryptographicOperations.FixedTimeEquals(computedHash, expectedHash);
+            }
+            catch
+            {
+                // On error, treat as authentication failure
+                return false;
+            }
+        }
+
+        private static byte[] HashPassword(string password, byte[] salt)
+        {
+            // PBKDF2 with SHA-256, 100k iterations, 32-byte derived key
+            using var derive = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
+            return derive.GetBytes(32);
         }
     }
 }
