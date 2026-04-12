@@ -17,9 +17,9 @@ namespace AssetGuard
         private readonly LogService logService;
         private static readonly string DbPath = Path.Combine(FileSystem.AppDataDirectory, "items.db");
 
-        public ObservableCollection<string> Items { get; } = new();
+        public ObservableCollection<string> Items { get; } = [];
 
-        private string selectedItem;
+        private string selectedItem = string.Empty;
         public string SelectedItem
         {
             get => selectedItem;
@@ -33,16 +33,17 @@ namespace AssetGuard
             }
         }
 
-        private Entry usernameEntry;
-        private Entry passwordEntry;
-        private Grid mainGrid;
-        private Grid loginGrid;
+        private readonly Entry? usernameEntry;
+        private readonly Entry? passwordEntry;
+        private readonly Grid? mainGrid;
+        private readonly Grid? loginGrid;
 
         // Secure storage keys
         private const string KeyUsername = "cred_username";
         private const string KeyPasswordHash = "cred_password_hash";
         private const string KeySalt = "cred_salt";
 
+        #region:MainPage
         public MainPage()
         {
             SQLitePCL.Batteries.Init();
@@ -64,15 +65,16 @@ namespace AssetGuard
                 Items.Add(item);
 
             // Ensure credentials exist (create default if absent). Fire-and-forget is OK here; handle exceptions inside.
-            _ = EnsureDefaultCredentialsAsync();
+            _ = MainPage.EnsureDefaultCredentialsAsync();
         }
+        #endregion
 
-        [Obsolete]
-        private void OnAddButtonClicked(object sender, EventArgs e)
+        #region:Methods of MainPage
+        private async void OnAddButtonClicked(object? sender, EventArgs e)
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(ItemEditor.Text))
+                if (!string.IsNullOrWhiteSpace(ItemEditor?.Text))
                 {
                     itemRepository.AddItem(ItemEditor.Text);
                     Items.Clear();
@@ -84,11 +86,11 @@ namespace AssetGuard
             }
             catch (Exception ex)
             {
-                DisplayAlert("Error", $"Add failed: {ex.Message}", "OK");
+                await DisplayAlertAsync("Error", $"Add failed: {ex.Message}", "OK");
             }
         }
 
-        private void OnRemoveButtonClicked(object sender, EventArgs e)
+        private async void OnRemoveButtonClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -99,38 +101,41 @@ namespace AssetGuard
                     foreach (var item in itemRepository.LoadItems())
                         Items.Add(item);
                     logService.LogAction($"User removed item: '{SelectedItem}'");
-                    SelectedItem = null;
+                    SelectedItem = string.Empty;
                 }
             }
             catch (Exception ex)
             {
-                DisplayAlert("Error", $"Remove failed: {ex.Message}", "OK");
+                await DisplayAlertAsync("Error", $"Remove failed: {ex.Message}", "OK");
             }
         }
 
-        private void OnEditButtonClicked(object sender, EventArgs e)
+        private async void OnEditButtonClicked(object? sender, EventArgs e)
         {
             try
             {
-                if (!string.IsNullOrEmpty(SelectedItem) && !string.IsNullOrWhiteSpace(ItemEditor.Text))
+                if (!string.IsNullOrEmpty(SelectedItem) && !string.IsNullOrWhiteSpace(ItemEditor?.Text))
                 {
                     itemRepository.EditItem(SelectedItem, ItemEditor.Text);
                     Items.Clear();
                     foreach (var item in itemRepository.LoadItems())
                         Items.Add(item);
                     logService.LogAction($"User edited item: '{ItemEditor.Text}'");
-                    SelectedItem = null;
+                    SelectedItem = string.Empty;
                     ItemEditor.Text = string.Empty;
                 }
             }
             catch (Exception ex)
             {
-                DisplayAlert("Error", $"Edit failed: {ex.Message}", "OK");
+                await DisplayAlertAsync("Error", $"Edit failed: {ex.Message}", "OK");
             }
         }
+        #endregion
+
+        #region:Login/Logout and credential handling
 
         // Make login async and verify against securely stored hash+salt in SecureStorage
-        private async void OnLoginClicked(object sender, EventArgs e)
+        private async void OnLoginClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -140,30 +145,37 @@ namespace AssetGuard
                 var verified = await VerifyCredentialsAsync(username, password);
                 if (verified)
                 {
-                    loginGrid.IsVisible = false;
-                    mainGrid.IsVisible = true;
+                    if (loginGrid != null && mainGrid != null)
+                    {
+                        loginGrid.IsVisible = false;
+                        mainGrid.IsVisible = true;
+                    }
                     logService.LogAction($"User '{username}' logged in.");
                 }
                 else
                 {
-                    await DisplayAlert("Error", "Invalid username or password.", "OK");
+                    await DisplayAlertAsync("Error", "Invalid username or password.", "OK");
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Login failed: {ex.Message}", "OK");
+                await DisplayAlertAsync("Error", $"Login failed: {ex.Message}", "OK");
             }
         }
 
-        private void OnLogoutClicked(object sender, EventArgs e)
+        private void OnLogoutClicked(object? sender, EventArgs e)
         {
-            loginGrid.IsVisible = true;
-            mainGrid.IsVisible = false;
-            usernameEntry.Text = string.Empty;
-            passwordEntry.Text = string.Empty;
+            if (loginGrid != null && mainGrid != null)
+            {
+                loginGrid.IsVisible = true;
+                mainGrid.IsVisible = false;
+            }
+
+            usernameEntry?.Text = string.Empty;
+            passwordEntry?.Text = string.Empty;
         }
 
-        private async void OnLogFileTapped(object sender, EventArgs e)
+        private async void OnLogFileTapped(object? sender, Microsoft.Maui.Controls.TappedEventArgs e)
         {
             if (File.Exists(logService.LogFilePath))
             {
@@ -174,13 +186,13 @@ namespace AssetGuard
             }
             else
             {
-                await DisplayAlert("Log File", "Log file not found.", "OK");
+                await DisplayAlertAsync("Log File", "Log file not found.", "OK");
             }
         }
 
         // --- Credential helpers ---
 
-        private async Task EnsureDefaultCredentialsAsync()
+        private static async Task EnsureDefaultCredentialsAsync()
         {
             try
             {
@@ -199,7 +211,7 @@ namespace AssetGuard
         }
 
         // Creates and stores username, salted password hash in SecureStorage
-        private async Task CreateStoredCredentialsAsync(string username, string password)
+        private static async Task CreateStoredCredentialsAsync(string username, string password)
         {
             var salt = RandomNumberGenerator.GetBytes(16);
             var hash = HashPassword(password, salt);
@@ -210,7 +222,7 @@ namespace AssetGuard
         }
 
         // Verifies credentials by recomputing hash from stored salt and comparing in constant time.
-        private async Task<bool> VerifyCredentialsAsync(string username, string password)
+        private static async Task<bool> VerifyCredentialsAsync(string username, string password)
         {
             try
             {
@@ -239,8 +251,15 @@ namespace AssetGuard
         private static byte[] HashPassword(string password, byte[] salt)
         {
             // PBKDF2 with SHA-256, 100k iterations, 32-byte derived key
-            using var derive = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
-            return derive.GetBytes(32);
+            var result = new byte[32];
+            Rfc2898DeriveBytes.Pbkdf2(
+                password: System.Text.Encoding.UTF8.GetBytes(password),
+                salt: salt,
+                iterations: 100_000,
+                destination: result,
+                hashAlgorithm: HashAlgorithmName.SHA256);
+            return result;
         }
     }
 }
+    #endregion
