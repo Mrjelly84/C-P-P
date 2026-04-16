@@ -12,5 +12,7 @@ namespace AssetGuard.Services
         }
 
         public string LogFilePath => logFilePath;
+
+        public string ReadAll() => File.Exists(logFilePath) ? File.ReadAllText(logFilePath) : string.Empty;
     }
 }
