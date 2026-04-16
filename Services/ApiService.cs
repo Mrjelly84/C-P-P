@@ -11,7 +11,7 @@ using Microsoft.Maui.Storage;
 
 namespace AssetGuard.Services
 {
-    // Simple API client used only for demonstration/sync in this sample.
+    // Initialize the JsonSerializerOptions once and reuse it for all serialization/deserialization operations.
     public class ApiService
     {
         private readonly HttpClient http;
@@ -19,14 +19,19 @@ namespace AssetGuard.Services
         private readonly bool useMockServer;
         private readonly string mockFilePath;
 
+        // Use a static or readonly instance for JsonSerializerOptions to avoid recreation.
+        private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions { WriteIndented = true };
+
         public ApiService(string baseUrl)
         {
             this.baseUrl = baseUrl?.TrimEnd('/') ?? string.Empty;
             http = new HttpClient { BaseAddress = new Uri(this.baseUrl) };
+
             // If no real API configured (placeholder), use a local file to emulate server
             useMockServer = string.IsNullOrWhiteSpace(this.baseUrl) || this.baseUrl.Contains("example.com", StringComparison.OrdinalIgnoreCase);
             mockFilePath = Path.Combine(FileSystem.AppDataDirectory, "mock_server_items.json");
         }
+
         // Retries with exponential backoff for transient network issues
         private static async Task<T?> WithRetriesAsync<T>(Func<Task<T>> operation, int maxAttempts = 3, int initialDelayMs = 300)
         {
@@ -56,16 +61,23 @@ namespace AssetGuard.Services
                 // emulate network latency
                 await Task.Delay(150, ct);
                 if (!File.Exists(mockFilePath))
-                    return new List<Item>();
+                    return [];
+
                 var txt = await File.ReadAllTextAsync(mockFilePath, ct);
+
                 try
                 {
-                    var items = JsonSerializer.Deserialize<List<Item>>(txt);
-                    return items ?? new List<Item>();
+                    // Simplified null handling and reused SerializerOptions
+                    if (string.IsNullOrWhiteSpace(txt))
+                        return [];
+
+                    var items = JsonSerializer.Deserialize<List<Item>>(txt, SerializerOptions);
+                    // Simplified null return check
+                    return items ?? [];
                 }
                 catch
                 {
-                    return new List<Item>();
+                    return [];
                 }
             }
             return await WithRetriesAsync(async () =>
@@ -77,8 +89,11 @@ namespace AssetGuard.Services
                     var body = await res.Content.ReadAsStringAsync(ct);
                     throw new HttpRequestException($"GET items failed: {(int)res.StatusCode} {res.ReasonPhrase} - {body}");
                 }
+
+                // Use the modern ReadFromJsonAsync<T>() pattern with optional cancellation
+                // We can also simplify the null check here.
                 var items = await res.Content.ReadFromJsonAsync<List<Item>>(cancellationToken: ct);
-                return items ?? new List<Item>();
+                return items ?? [];
             });
         }
 
@@ -90,8 +105,9 @@ namespace AssetGuard.Services
                 await Task.Delay(150, ct);
                 try
                 {
+                    // Use the reusable SerializerOptions
                     var list = new List<Item>(items);
-                    var txt = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+                    var txt = JsonSerializer.Serialize(list, SerializerOptions);
                     await File.WriteAllTextAsync(mockFilePath, txt, ct);
                     return true;
                 }

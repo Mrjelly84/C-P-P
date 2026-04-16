@@ -30,7 +30,7 @@ namespace AssetGuard
         private bool isAuthenticated = false;
         private string latestSyncError = string.Empty;
 
-        private Item? selectedItem = null;
+        private Item? selectedItem;
         public Item? SelectedItem
         {
             get => selectedItem;
