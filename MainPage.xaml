@@ -34,8 +34,7 @@
                             <TapGestureRecognizer Tapped="OnLogFileTapped" />
                         </Label.GestureRecognizers>
                     </Label>
-                    <Button Text="Open Mock Server" Clicked="OnOpenMockServerClicked" />
-                    <Button Text="Copy Runtime Log" Clicked="OnCopyLogToRepoClicked" />
+                    
                 </StackLayout>
             </Grid>
             <Grid x:Name="MainGrid" IsVisible="False">

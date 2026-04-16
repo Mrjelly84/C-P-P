@@ -1,17 +1,9 @@
 ﻿using AssetGuard.Models;
 using AssetGuard.Services;
-using Microsoft.Maui.Controls;
-using Microsoft.Maui.Storage;
-using System;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading;
-using System.IO;
 using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 
-#nullable disable
+
 
 namespace AssetGuard
 {
@@ -61,6 +53,7 @@ namespace AssetGuard
             InitializeComponent();
             BindingContext = this;
 
+            // Note: FindByName returns nullable types (Entry?), which is why null checks are necessary.
             usernameEntry = this.FindByName<Entry>("UsernameEntry");
             passwordEntry = this.FindByName<Entry>("PasswordEntry");
             mainGrid = this.FindByName<Grid>("MainGrid");
@@ -72,13 +65,12 @@ namespace AssetGuard
             itemRepository = new ItemRepository(DbPath, tableName);
             logService = new LogService(logFilePath);
 
-            // API client used when in "online" mode
             apiService = new ApiService(ApiBaseUrl);
 
             // Defer loading and state initialization to async initializer
             _ = InitializeAsync();
 
-            // Ensure credentials exist (create default if absent). Fire-and-forget is OK here; handle exceptions inside.
+            // Ensure credentials exist
             _ = MainPage.EnsureDefaultCredentialsAsync();
         }
         #endregion
@@ -86,7 +78,8 @@ namespace AssetGuard
         private void RefreshLocalItems()
         {
             var local = itemRepository.LoadItems();
-            Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+            // Using Dispatcher.Dispatch for modern MAUI main thread access
+            Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
             {
                 Items.Clear();
                 foreach (var it in local)
@@ -106,23 +99,22 @@ namespace AssetGuard
                 isOnline = val == "1";
 
                 // Ensure UI switch and label reflect stored state
-                Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
                     var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
                     var onlineLabel = this.FindByName<Label>("OnlineStatusLabel");
-                    if (onlineSwitch != null) onlineSwitch.IsToggled = isOnline;
-                    if (onlineLabel != null) onlineLabel.Text = isOnline ? "Online" : "Offline";
+                    onlineSwitch?.IsToggled = isOnline;
+                    onlineLabel?.Text = isOnline ? "Online" : "Offline";
                 });
 
                 if (isOnline)
                 {
-                    // If online, run full sync which will update UI with correct sync states
                     await SyncWithServerAsync();
                 }
                 else
                 {
                     // Offline: show local items and mark them accordingly
-                    Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                    Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                     {
                         Items.Clear();
                         foreach (var it in list)
@@ -133,11 +125,11 @@ namespace AssetGuard
                     });
                 }
             }
-            catch
+            catch (Exception)
             {
                 // If initialization fails, fall back to showing local DB items as local
                 var list = itemRepository.LoadItems();
-                Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
                     Items.Clear();
                     foreach (var it in list)
@@ -157,7 +149,7 @@ namespace AssetGuard
                 if (!string.IsNullOrWhiteSpace(ItemEditor?.Text))
                 {
                     itemRepository.AddItem(ItemEditor.Text);
-                    // pull updated items and add new item to UI
+
                     var list = itemRepository.LoadItems();
                     Items.Clear();
                     foreach (var it in list)
@@ -183,6 +175,7 @@ namespace AssetGuard
                 if (itemToRemove != null)
                 {
                     itemRepository.RemoveItem(itemToRemove.Id);
+
                     Items.Clear();
                     foreach (var item in itemRepository.LoadItems())
                     {
@@ -208,6 +201,7 @@ namespace AssetGuard
                 if (itemToEdit != null && !string.IsNullOrWhiteSpace(newText))
                 {
                     itemRepository.EditItem(itemToEdit.Id, newText);
+
                     Items.Clear();
                     foreach (var item in itemRepository.LoadItems())
                     {
@@ -228,7 +222,6 @@ namespace AssetGuard
 
         #region:Login/Logout and credential handling
 
-        // Make login async and verify against securely stored hash+salt in SecureStorage
         private async void OnLoginClicked(object? sender, EventArgs e)
         {
             try
@@ -239,44 +232,39 @@ namespace AssetGuard
                 var verified = await VerifyCredentialsAsync(username, password);
                 if (verified)
                 {
-                    if (loginGrid != null && mainGrid != null)
-                    {
-                        loginGrid.IsVisible = false;
-                        mainGrid.IsVisible = true;
-                    }
-                    // Track authentication state so sync attempts are gated
+                    loginGrid?.IsVisible = false;
+                    mainGrid?.IsVisible = true;
+
                     isAuthenticated = true;
                     logService.LogAction($"User '{username}' logged in.");
 
-                    // Enable online switch now that user is authenticated
-                    Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                    Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                     {
                         var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
-                        if (onlineSwitch != null) onlineSwitch.IsEnabled = true;
+                        onlineSwitch?.IsEnabled = true;
                     });
 
-                    // Refresh UI with local items immediately after login
                     RefreshLocalItems();
 
-                    // If the online switch is currently on, attempt a background sync.
-                    // Prefer the UI switch state (reflects current user choice) and fall back to persisted preference.
                     try
                     {
                         var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
-                        if (onlineSwitch != null && onlineSwitch.IsToggled)
+                        if (onlineSwitch?.IsToggled == true)
                         {
-                            _ = SyncWithServerAsync();
+                            await SyncWithServerAsync();
                         }
                         else
                         {
                             var val = await SecureStorage.GetAsync(KeyIsOnline);
                             if (val == "1")
-                                _ = SyncWithServerAsync();
+                            {
+                                await SyncWithServerAsync();
+                            }
                         }
                     }
-                    catch
+                    catch (Exception)
                     {
-                        // ignore
+                        // Ignore initial sync failures
                     }
                 }
                 else
@@ -292,36 +280,24 @@ namespace AssetGuard
 
         private void OnLogoutClicked(object? sender, EventArgs e)
         {
-            // toggle visibility using null-conditional access to simplify null checks
-            if (loginGrid is not null)
-                loginGrid.IsVisible = true;
-            if (mainGrid is not null)
-                mainGrid.IsVisible = false;
+            loginGrid?.IsVisible = true;
+            mainGrid?.IsVisible = false;
 
-            if (usernameEntry is not null)
-                usernameEntry.Text = string.Empty;
-            if (passwordEntry is not null)
-                passwordEntry.Text = string.Empty;
+            usernameEntry?.Text = string.Empty;
+            passwordEntry?.Text = string.Empty;
 
-            // Clear authentication state
             isAuthenticated = false;
 
-            // Leave the online toggle enabled on the login screen so the user can choose the preferred state
-            Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+            Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
             {
                 var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
                 var onlineLabel = this.FindByName<Label>("OnlineStatusLabel");
-                if (onlineSwitch != null)
-                {
-                    // show as offline by default but keep control enabled for the user to toggle before login
-                    onlineSwitch.IsToggled = false;
-                    onlineSwitch.IsEnabled = true;
-                }
-                if (onlineLabel != null)
-                    onlineLabel.Text = "Offline";
+
+                onlineSwitch?.IsToggled = false;
+                onlineSwitch?.IsEnabled = true;
+                onlineLabel?.Text = "Offline";
             });
 
-            // Persist offline preference but allow the user to change it on the login screen
             _ = SecureStorage.SetAsync(KeyIsOnline, "0");
             isOnline = false;
         }
@@ -341,7 +317,6 @@ namespace AssetGuard
             }
         }
 
-        // Debug helper: open the mock server JSON file used by ApiService when no real API is configured
         private async void OnOpenMockServerClicked(object? sender, EventArgs e)
         {
             var mockPath = Path.Combine(FileSystem.AppDataDirectory, "mock_server_items.json");
@@ -351,11 +326,10 @@ namespace AssetGuard
             }
             else
             {
-                await DisplayAlert("Mock Server", "Mock server file not found.", "OK");
+                await DisplayAlertAsync("Mock Server", "Mock server file not found.", "OK");
             }
         }
 
-        // Debug helper: copy the runtime useractions.log into the repo workspace for easy inspection
         private async void OnCopyLogToRepoClicked(object? sender, EventArgs e)
         {
             try
@@ -363,49 +337,34 @@ namespace AssetGuard
                 var runtimePath = logService.LogFilePath;
                 if (!File.Exists(runtimePath))
                 {
-                    await DisplayAlert("Copy Log", "Runtime log not found.", "OK");
+                    await DisplayAlertAsync("Copy Log", "Runtime log not found.", "OK");
                     return;
                 }
 
-                // Try to copy into the local repo workspace (developer machine). Update this path if your workspace is elsewhere.
                 var repoRoot = @"C:\Users\willi\source\repos\Mrjelly84\C-P-P";
-                string target;
-                if (Directory.Exists(repoRoot))
-                {
-                    target = Path.Combine(repoRoot, "useractions_runtime_copy.log");
-                }
-                else
-                {
-                    // Fallback to app's base directory
-                    target = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "useractions_runtime_copy.log");
-                }
+                string target = Directory.Exists(repoRoot)
+                    ? Path.Combine(repoRoot, "useractions_runtime_copy.log")
+                    : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "useractions_runtime_copy.log");
 
                 File.Copy(runtimePath, target, true);
-                await DisplayAlert("Copy Log", $"Copied runtime log to: {target}", "OK");
+                await DisplayAlertAsync("Copy Log", $"Copied runtime log to: {target}", "OK");
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Copy Log", $"Copy failed: {ex.Message}", "OK");
+                await DisplayAlertAsync("Copy Log", $"Copy failed: {ex.Message}", "OK");
             }
         }
 
         private void OnOnlineToggled(object sender, ToggledEventArgs e)
         {
-            var sw = sender as Switch;
             var label = this.FindByName<Label>("OnlineStatusLabel");
-            if (label != null)
-                label.Text = e.Value ? "Online" : "Offline";
+            label?.Text = e.Value ? "Online" : "Offline";
 
-            // Persist preference in SecureStorage
             _ = SecureStorage.SetAsync(KeyIsOnline, e.Value ? "1" : "0");
-
-            // Update internal online flag
             isOnline = e.Value;
 
-            // If toggled online, sync local db with server (pull then push local)
-            // Immediately ensure the UI reflects local storage so user sees their offline items
             var localNow = itemRepository.LoadItems();
-            Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+            Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
             {
                 Items.Clear();
                 foreach (var it in localNow)
@@ -420,27 +379,29 @@ namespace AssetGuard
 
         private async Task SyncWithServerAsync()
         {
+            // Prevent re-entrancy during sync
+            if (this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning == true)
+            {
+                return;
+            }
+
             try
             {
-                // proceed with sync (ApiService supports a mock server mode when no real API is configured)
-                // Load local items
                 var localItems = itemRepository.LoadItems();
 
                 // Start progress UI
-                Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    var ai = this.FindByName<ActivityIndicator>("SyncActivity");
-                    var lbl = this.FindByName<Label>("SyncStatusLabel");
-                    if (ai != null) { ai.IsVisible = true; ai.IsRunning = true; }
-                    if (lbl != null) lbl.Text = "Syncing...";
+                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsVisible = true;
+                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning = true;
+                    this.FindByName<Label>("SyncStatusLabel")?.Text = "Syncing...";
                 });
 
-                // Push local items to server (send local changes first)
+                // 1. Push local items
                 if (!isAuthenticated)
                 {
                     logService.LogAction("Sync skipped: user not authenticated.");
-                    // show offline UI state
-                    Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                    Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                     {
                         Items.Clear();
                         foreach (var it in localItems)
@@ -448,8 +409,8 @@ namespace AssetGuard
                             it.SyncState = 1; // local only
                             Items.Add(it);
                         }
-                        var lbl = this.FindByName<Label>("SyncStatusLabel");
-                        if (lbl != null) lbl.Text = "Offline";
+                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Offline";
+                        this.FindByName<Label>("OnlineStatusLabel")?.Text = "Offline";
                     });
                     return;
                 }
@@ -461,30 +422,28 @@ namespace AssetGuard
                 }
                 catch (Exception ex)
                 {
-                    latestSyncError = ex.ToString();
+                    latestSyncError = ex.Message; // Use message instead of ToString()
                     logService.LogAction($"Sync push failed: {ex}");
-                    // Ensure UI shows local state and surface alert
-                    Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(async () =>
+
+                    Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(async () =>
                     {
                         Items.Clear();
                         foreach (var it in localItems)
                         {
-                            it.SyncState = 1; // local only
+                            it.SyncState = 1;
                             Items.Add(it);
                         }
-                        var lbl = this.FindByName<Label>("SyncStatusLabel");
-                        if (lbl != null) lbl.Text = "Offline";
-                        var onlineLabel = this.FindByName<Label>("OnlineStatusLabel");
-                        if (onlineLabel != null) onlineLabel.Text = "Offline";
-                        await DisplayAlert("Sync Error", latestSyncError, "OK");
+                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                        await DisplayAlertAsync("Sync Error", latestSyncError, "OK");
                     });
                     return;
                 }
+
                 if (!pushSucceeded)
                 {
                     latestSyncError = "Sync push failed: server returned non-success status.";
                     logService.LogAction(latestSyncError);
-                    Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(async () =>
+                    Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(async () =>
                     {
                         Items.Clear();
                         foreach (var it in localItems)
@@ -492,21 +451,20 @@ namespace AssetGuard
                             it.SyncState = 1;
                             Items.Add(it);
                         }
-                        var lbl = this.FindByName<Label>("SyncStatusLabel");
-                        if (lbl != null) lbl.Text = "Sync failed";
-                        await DisplayAlert("Sync Error", latestSyncError, "OK");
+                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                        await DisplayAlertAsync("Sync Error", latestSyncError, "OK");
                     });
                     return;
                 }
 
-                // Fetch server items
+                // 2. Fetch server items
                 var serverItems = await apiService.GetItemsAsync();
                 if (serverItems == null || !serverItems.Any())
                 {
-                    // If server returned nothing after a successful push it's unexpected; treat as sync failure
                     latestSyncError = "Sync fetch returned no items: treating as sync failure.";
                     logService.LogAction(latestSyncError);
-                    Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(async () =>
+
+                    Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(async () =>
                     {
                         Items.Clear();
                         foreach (var it in localItems)
@@ -514,20 +472,24 @@ namespace AssetGuard
                             it.SyncState = 1;
                             Items.Add(it);
                         }
-                        var lbl = this.FindByName<Label>("SyncStatusLabel");
-                        if (lbl != null) lbl.Text = "Sync failed";
-                        await DisplayAlert("Sync Error", latestSyncError, "OK");
+                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                        await DisplayAlertAsync("Sync Error", latestSyncError, "OK");
                     });
                     return;
                 }
 
-                // Resolve per-item conflicts by LastModified (last-write-wins)
+                // Merge local and server items
                 var merged = new Dictionary<string, Item>(StringComparer.OrdinalIgnoreCase);
                 foreach (var it in localItems)
                     merged[it.Id] = it;
+
                 foreach (var sit in serverItems)
                 {
-                    if (!merged.TryGetValue(sit.Id, out var existing) || sit.LastModified > existing.LastModified)
+                    if (merged.TryGetValue(sit.Id, out var existing) && sit.LastModified > existing.LastModified)
+                    {
+                        merged[sit.Id] = sit;
+                    }
+                    else if (!merged.ContainsKey(sit.Id))
                     {
                         merged[sit.Id] = sit;
                     }
@@ -535,16 +497,16 @@ namespace AssetGuard
 
                 var mergedList = merged.Values.OrderBy(i => i.LastModified).ToList();
 
-                // Update sync state per item: if present only locally before merge mark Local (1), if newer than server mark Modified (2)
+                // Update sync state per item
                 foreach (var it in mergedList)
                 {
-                    // default: synced
                     it.SyncState = 0;
                 }
 
-                // Detect local-only items
+                // Detect local-only and modified items
                 var localIds = new HashSet<string>(localItems.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
                 var serverIds = new HashSet<string>(serverItems.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
+
                 foreach (var it in mergedList)
                 {
                     if (localIds.Contains(it.Id) && !serverIds.Contains(it.Id))
@@ -553,6 +515,7 @@ namespace AssetGuard
                     {
                         var local = localItems.FirstOrDefault(x => x.Id == it.Id);
                         var server = serverItems.FirstOrDefault(x => x.Id == it.Id);
+                        // Check if local version is newer than the server version
                         if (local != null && server != null && local.LastModified > server.LastModified)
                             it.SyncState = 2; // modified locally
                     }
@@ -560,65 +523,41 @@ namespace AssetGuard
 
                 // Update local DB and UI with merged collection
                 itemRepository.ReplaceAll(mergedList);
-                Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
                     Items.Clear();
                     foreach (var it in mergedList)
                         Items.Add(it);
                 });
 
-                // Push merged collection back to server
+                // 3. Push merged collection back to server
                 await apiService.PushItemsAsync(mergedList);
 
                 logService.LogAction("Sync completed (per-item last-write-wins).");
 
                 // End progress UI
-                Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+                Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    var ai = this.FindByName<ActivityIndicator>("SyncActivity");
-                    var lbl = this.FindByName<Label>("SyncStatusLabel");
-                    if (ai != null) { ai.IsRunning = false; ai.IsVisible = false; }
-                    if (lbl != null) lbl.Text = "";
+                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning = false;
+                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsVisible = false;
+                    this.FindByName<Label>("SyncStatusLabel")?.Text = "";
                 });
             }
             catch (Exception ex)
             {
-                // Sync failures should not crash app; log the error
                 logService.LogAction($"Sync failed: {ex.Message}");
-                Microsoft.Maui.ApplicationModel.MainThread.BeginInvokeOnMainThread(() =>
+
+                // Display error UI
+                Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    var ai = this.FindByName<ActivityIndicator>("SyncActivity");
-                    var lbl = this.FindByName<Label>("SyncStatusLabel");
-                    if (ai != null) { ai.IsRunning = false; ai.IsVisible = false; }
-                    if (lbl != null) lbl.Text = "Sync failed";
+                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning = false;
+                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsVisible = false;
+                    this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
                 });
             }
         }
 
         // --- Credential helpers ---
-
-        private async Task RestoreOnlineStateAsync()
-        {
-            try
-            {
-                var val = await SecureStorage.GetAsync(KeyIsOnline);
-                var isOnline = val == "1";
-
-                var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
-                var onlineLabel = this.FindByName<Label>("OnlineStatusLabel");
-                if (onlineSwitch != null)
-                    onlineSwitch.IsToggled = isOnline;
-                if (onlineLabel != null)
-                    onlineLabel.Text = isOnline ? "Online" : "Offline";
-
-                if (isOnline)
-                    await SyncWithServerAsync();
-            }
-            catch
-            {
-                // ignore
-            }
-        }
 
         private static async Task EnsureDefaultCredentialsAsync()
         {
@@ -627,18 +566,15 @@ namespace AssetGuard
                 var existing = await SecureStorage.GetAsync(KeyUsername);
                 if (string.IsNullOrEmpty(existing))
                 {
-                    // Create a safe default for first run. Change immediately in production.
                     await CreateStoredCredentialsAsync("admin", "password123");
                 }
             }
-            catch
+            catch (Exception)
             {
-                // SecureStorage may throw on some emulators/unsupported platforms.
-                // Swallowing the exception keeps app usable; consider notifying or using a fallback storage.
+                // Swallowing the exception here.
             }
         }
 
-        // Creates and stores username, salted password hash in SecureStorage
         private static async Task CreateStoredCredentialsAsync(string username, string password)
         {
             var salt = RandomNumberGenerator.GetBytes(16);
@@ -649,13 +585,12 @@ namespace AssetGuard
             await SecureStorage.SetAsync(KeySalt, Convert.ToBase64String(salt));
         }
 
-        // Verifies credentials by recomputing hash from stored salt and comparing in constant time.
         private static async Task<bool> VerifyCredentialsAsync(string username, string password)
         {
             try
             {
                 var storedUser = await SecureStorage.GetAsync(KeyUsername);
-                if (string.IsNullOrEmpty(storedUser) || storedUser != username)
+                if (string.IsNullOrEmpty(storedUser) || !storedUser.Equals(username, StringComparison.OrdinalIgnoreCase))
                     return false;
 
                 var storedHashB64 = await SecureStorage.GetAsync(KeyPasswordHash);
@@ -669,16 +604,14 @@ namespace AssetGuard
 
                 return CryptographicOperations.FixedTimeEquals(computedHash, expectedHash);
             }
-            catch
+            catch (Exception)
             {
-                // On error, treat as authentication failure
                 return false;
             }
         }
 
         private static byte[] HashPassword(string password, byte[] salt)
         {
-            // PBKDF2 with SHA-256, 100k iterations, 32-byte derived key
             var result = new byte[32];
             Rfc2898DeriveBytes.Pbkdf2(
                 password: System.Text.Encoding.UTF8.GetBytes(password),

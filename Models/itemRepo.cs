@@ -1,11 +1,7 @@
 ﻿using Microsoft.Data.Sqlite;
-using Microsoft.Maui.Storage;
 using System.Collections.ObjectModel;
-using System.Collections.Generic;
-using System.IO;
-using System;
 using System.Data;
-using AssetGuard.Models;
+            
 
 namespace AssetGuard.Models
 {

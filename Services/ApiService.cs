@@ -1,13 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
-using System.Threading;
 using AssetGuard.Models;
-using System.IO;
 using System.Text.Json;
-using Microsoft.Maui.Storage;
 
 namespace AssetGuard.Services
 {
@@ -80,7 +73,7 @@ namespace AssetGuard.Services
                     return [];
                 }
             }
-            return await WithRetriesAsync(async () =>
+            List<Item>? items1 = await WithRetriesAsync(async () =>
             {
                 // Use a relative URI (no leading slash) so BaseAddress path segment is preserved
                 using var res = await http.GetAsync("items", ct);
@@ -95,6 +88,7 @@ namespace AssetGuard.Services
                 var items = await res.Content.ReadFromJsonAsync<List<Item>>(cancellationToken: ct);
                 return items ?? [];
             });
+            return items1;
         }
 
         public async Task<bool> PushItemsAsync(IEnumerable<Item> items, CancellationToken ct = default)
