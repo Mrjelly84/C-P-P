@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:AssetGuard.Models"
              x:Class="AssetGuard.MainPage"
              Title="AssetGuard App">
 
@@ -11,24 +12,31 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <!-- For spacing -->
                 </Grid.RowDefinitions>
                 <Entry x:Name="UsernameEntry" Placeholder="Username" Grid.Row="0" Margin="20"/>
                 <Entry x:Name="PasswordEntry" Placeholder="Password" IsPassword="True" Grid.Row="1" Margin="20"/>
                 <Button Text="Login" Grid.Row="2" Margin="20" Clicked="OnLoginClicked"/>
-                <!-- Log file link in bottom right -->
-                <Label
-                    Text="View Log File"
-                    TextColor="White"
-                    Grid.Row="3"
-                    HorizontalOptions="End"
-                    VerticalOptions="End"
-                    Margin="20">
-                    <Label.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnLogFileTapped" />
-                    </Label.GestureRecognizers>
-                </Label>
+                <!-- Online/Offline toggle -->
+                <StackLayout Orientation="Horizontal" Grid.Row="3" HorizontalOptions="Start" Margin="20" Spacing="10">
+                    <Label x:Name="OnlineStatusLabel" Text="Online" TextColor="White" VerticalOptions="Center" />
+                    <Switch x:Name="OnlineSwitch" IsToggled="True" IsEnabled="True" Toggled="OnOnlineToggled" />
+                </StackLayout>
+                <!-- Log file link and debug helpers in bottom right -->
+                <StackLayout Grid.Row="4" Orientation="Horizontal" HorizontalOptions="End" VerticalOptions="End" Margin="20" Spacing="8">
+                    <Label
+                        Text="View Log File"
+                        TextColor="White"
+                        VerticalOptions="Center">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnLogFileTapped" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Button Text="Open Mock Server" Clicked="OnOpenMockServerClicked" />
+                    <Button Text="Copy Runtime Log" Clicked="OnCopyLogToRepoClicked" />
+                </StackLayout>
             </Grid>
             <Grid x:Name="MainGrid" IsVisible="False">
                 <Grid ColumnSpacing="0" RowSpacing="0">
@@ -42,6 +50,14 @@
                         <RowDefinition Height="*" />
                         <!-- Output box fills remaining space -->
                     </Grid.RowDefinitions>
+
+                    <!-- Sync progress display -->
+                    <Grid Grid.ColumnSpan="2" Grid.Row="0" HorizontalOptions="End" VerticalOptions="Start" Padding="0,10,10,0">
+                        <StackLayout Orientation="Horizontal" Spacing="8" HorizontalOptions="End">
+                            <ActivityIndicator x:Name="SyncActivity" IsVisible="False" IsRunning="False" Color="White" WidthRequest="20" HeightRequest="20" />
+                            <Label x:Name="SyncStatusLabel" Text="" TextColor="White" VerticalOptions="Center" />
+                        </StackLayout>
+                    </Grid>
 
                     <!-- Editor at the center -->
                     <Entry
@@ -77,7 +93,7 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Border BackgroundColor="Black" Padding="0">
+                    <Border BackgroundColor="Black" Padding="0">
                             <CollectionView
                                 x:Name="ItemsCollectionView"
                                 ItemsSource="{Binding Items}"
@@ -86,9 +102,14 @@
                                 ItemsLayout="VerticalList"
                                 VerticalScrollBarVisibility="Always">
                                 <CollectionView.ItemTemplate>
-                                    <DataTemplate>
+                                    <DataTemplate x:DataType="models:Item">
                                         <Grid Padding="0">
-                                            <Label Text="{Binding .}" FontSize="18" Padding="10" TextColor="White"/>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Label Text="{Binding Detail}" FontSize="18" Padding="10" TextColor="White" Grid.Column="0" />
+                                            <Label Text="{Binding SyncStatusText}" FontSize="12" Padding="10" TextColor="LightGray" Grid.Column="1" VerticalOptions="Center" />
                                         </Grid>
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
