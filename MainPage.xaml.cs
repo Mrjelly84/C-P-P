@@ -2,8 +2,8 @@
 using AssetGuard.Services;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
-
-
+using System.IO; // Added necessary using statement for Path and FileSystem
+using System.Linq; // Added necessary using statement for Linq methods
 
 namespace AssetGuard
 {
@@ -41,6 +41,13 @@ namespace AssetGuard
         private readonly Grid? mainGrid;
         private readonly Grid? loginGrid;
 
+        // UI elements that are used frequently, define them as local variables for safer access
+        private readonly Switch? onlineSwitch;
+        private readonly Label? onlineStatusLabel;
+        private readonly ActivityIndicator? syncActivity;
+        private readonly Label? syncStatusLabel;
+        private readonly Entry? itemEditor; // Defined here since it's used in the methods
+
         // Secure storage keys
         private const string KeyUsername = "cred_username";
         private const string KeyPasswordHash = "cred_password_hash";
@@ -58,6 +65,13 @@ namespace AssetGuard
             passwordEntry = this.FindByName<Entry>("PasswordEntry");
             mainGrid = this.FindByName<Grid>("MainGrid");
             loginGrid = this.FindByName<Grid>("LoginGrid");
+
+            // Initialize other referenced UI components for safety
+            onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
+            onlineStatusLabel = this.FindByName<Label>("OnlineStatusLabel");
+            syncActivity = this.FindByName<ActivityIndicator>("SyncActivity");
+            syncStatusLabel = this.FindByName<Label>("SyncStatusLabel");
+            itemEditor = this.FindByName<Entry>("ItemEditor"); // Assuming this is the name
 
             var tableName = "Items";
             var logFilePath = Path.Combine(FileSystem.AppDataDirectory, "useractions.log");
@@ -101,10 +115,9 @@ namespace AssetGuard
                 // Ensure UI switch and label reflect stored state
                 Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
-                    var onlineLabel = this.FindByName<Label>("OnlineStatusLabel");
+                    // FIX: Use local, non-nullable variables for cleaner, safer access
                     onlineSwitch?.IsToggled = isOnline;
-                    onlineLabel?.Text = isOnline ? "Online" : "Offline";
+                    onlineStatusLabel?.Text = isOnline ? "Online" : "Offline";
                 });
 
                 if (isOnline)
@@ -146,9 +159,9 @@ namespace AssetGuard
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(ItemEditor?.Text))
+                if (!string.IsNullOrWhiteSpace(itemEditor?.Text))
                 {
-                    itemRepository.AddItem(ItemEditor.Text);
+                    itemRepository.AddItem(itemEditor.Text);
 
                     var list = itemRepository.LoadItems();
                     Items.Clear();
@@ -157,8 +170,8 @@ namespace AssetGuard
                         it.SyncState = 1;
                         Items.Add(it);
                     }
-                    logService.LogAction($"User added item: '{ItemEditor.Text}'");
-                    ItemEditor.Text = string.Empty;
+                    logService.LogAction($"User added item: '{itemEditor.Text}'");
+                    itemEditor.Text = string.Empty;
                 }
             }
             catch (Exception ex)
@@ -197,7 +210,7 @@ namespace AssetGuard
             try
             {
                 var itemToEdit = SelectedItem;
-                var newText = ItemEditor?.Text;
+                var newText = itemEditor?.Text;
                 if (itemToEdit != null && !string.IsNullOrWhiteSpace(newText))
                 {
                     itemRepository.EditItem(itemToEdit.Id, newText);
@@ -210,7 +223,7 @@ namespace AssetGuard
                     }
                     logService.LogAction($"User edited item: '{newText}'");
                     SelectedItem = null;
-                    ItemEditor.Text = string.Empty;
+                    itemEditor.Text = string.Empty;
                 }
             }
             catch (Exception ex)
@@ -240,7 +253,7 @@ namespace AssetGuard
 
                     Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                     {
-                        var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
+                        // FIX: Use onlineSwitch directly
                         onlineSwitch?.IsEnabled = true;
                     });
 
@@ -248,7 +261,7 @@ namespace AssetGuard
 
                     try
                     {
-                        var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
+                        // FIX: Check if the control exists before accessing properties
                         if (onlineSwitch?.IsToggled == true)
                         {
                             await SyncWithServerAsync();
@@ -264,7 +277,7 @@ namespace AssetGuard
                     }
                     catch (Exception)
                     {
-                        // Ignore initial sync failures
+                        
                     }
                 }
                 else
@@ -290,12 +303,10 @@ namespace AssetGuard
 
             Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
             {
-                var onlineSwitch = this.FindByName<Switch>("OnlineSwitch");
-                var onlineLabel = this.FindByName<Label>("OnlineStatusLabel");
-
+                // FIX: Use local, non-nullable variables for cleaner, safer access
                 onlineSwitch?.IsToggled = false;
                 onlineSwitch?.IsEnabled = true;
-                onlineLabel?.Text = "Offline";
+                onlineStatusLabel?.Text = "Offline";
             });
 
             _ = SecureStorage.SetAsync(KeyIsOnline, "0");
@@ -357,8 +368,8 @@ namespace AssetGuard
 
         private void OnOnlineToggled(object sender, ToggledEventArgs e)
         {
-            var label = this.FindByName<Label>("OnlineStatusLabel");
-            label?.Text = e.Value ? "Online" : "Offline";
+            // FIX: Use local, non-nullable variables for cleaner, safer access
+            onlineStatusLabel?.Text = e.Value ? "Online" : "Offline";
 
             _ = SecureStorage.SetAsync(KeyIsOnline, e.Value ? "1" : "0");
             isOnline = e.Value;
@@ -380,7 +391,8 @@ namespace AssetGuard
         private async Task SyncWithServerAsync()
         {
             // Prevent re-entrancy during sync
-            if (this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning == true)
+            // FIX: Use local, non-nullable variables for cleaner, safer access
+            if (syncActivity?.IsRunning == true)
             {
                 return;
             }
@@ -392,9 +404,10 @@ namespace AssetGuard
                 // Start progress UI
                 Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsVisible = true;
-                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning = true;
-                    this.FindByName<Label>("SyncStatusLabel")?.Text = "Syncing...";
+                    // FIX: Check if controls are initialized before setting visibility/running state
+                    syncActivity?.IsVisible = true;
+                    syncActivity?.IsRunning = true;
+                    syncStatusLabel?.Text = "Syncing...";
                 });
 
                 // 1. Push local items
@@ -409,8 +422,8 @@ namespace AssetGuard
                             it.SyncState = 1; // local only
                             Items.Add(it);
                         }
-                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Offline";
-                        this.FindByName<Label>("OnlineStatusLabel")?.Text = "Offline";
+                        syncStatusLabel?.Text = "Offline";
+                        onlineStatusLabel?.Text = "Offline";
                     });
                     return;
                 }
@@ -422,7 +435,7 @@ namespace AssetGuard
                 }
                 catch (Exception ex)
                 {
-                    latestSyncError = ex.Message; // Use message instead of ToString()
+                    latestSyncError = ex.Message;
                     logService.LogAction($"Sync push failed: {ex}");
 
                     Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(async () =>
@@ -433,7 +446,7 @@ namespace AssetGuard
                             it.SyncState = 1;
                             Items.Add(it);
                         }
-                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                        syncStatusLabel?.Text = "Sync failed";
                         await DisplayAlertAsync("Sync Error", latestSyncError, "OK");
                     });
                     return;
@@ -451,7 +464,7 @@ namespace AssetGuard
                             it.SyncState = 1;
                             Items.Add(it);
                         }
-                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                        syncStatusLabel?.Text = "Sync failed";
                         await DisplayAlertAsync("Sync Error", latestSyncError, "OK");
                     });
                     return;
@@ -472,7 +485,7 @@ namespace AssetGuard
                             it.SyncState = 1;
                             Items.Add(it);
                         }
-                        this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                        syncStatusLabel?.Text = "Sync failed";
                         await DisplayAlertAsync("Sync Error", latestSyncError, "OK");
                     });
                     return;
@@ -538,9 +551,9 @@ namespace AssetGuard
                 // End progress UI
                 Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning = false;
-                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsVisible = false;
-                    this.FindByName<Label>("SyncStatusLabel")?.Text = "";
+                    syncActivity?.IsRunning = false;
+                    syncActivity?.IsVisible = false;
+                    syncStatusLabel?.Text = "";
                 });
             }
             catch (Exception ex)
@@ -550,9 +563,9 @@ namespace AssetGuard
                 // Display error UI
                 Microsoft.Maui.Controls.Application.Current.Dispatcher.Dispatch(() =>
                 {
-                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsRunning = false;
-                    this.FindByName<ActivityIndicator>("SyncActivity")?.IsVisible = false;
-                    this.FindByName<Label>("SyncStatusLabel")?.Text = "Sync failed";
+                    syncActivity?.IsRunning = false;
+                    syncActivity?.IsVisible = false;
+                    syncStatusLabel?.Text = "Sync failed";
                 });
             }
         }
@@ -619,8 +632,9 @@ namespace AssetGuard
                 iterations: 100_000,
                 destination: result,
                 hashAlgorithm: HashAlgorithmName.SHA256);
+
             return result;
         }
-        #endregion
     }
 }
+    #endregion

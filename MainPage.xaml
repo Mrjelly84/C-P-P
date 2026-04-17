@@ -21,8 +21,7 @@
                 <Button Text="Login" Grid.Row="2" Margin="20" Clicked="OnLoginClicked"/>
                 <!-- Online/Offline toggle -->
                 <StackLayout Orientation="Horizontal" Grid.Row="3" HorizontalOptions="Start" Margin="20" Spacing="10">
-                    <Label x:Name="OnlineStatusLabel" Text="Online" TextColor="White" VerticalOptions="Center" />
-                    <Switch x:Name="OnlineSwitch" IsToggled="True" IsEnabled="True" Toggled="OnOnlineToggled" />
+                   
                 </StackLayout>
                 <!-- Log file link and debug helpers in bottom right -->
                 <StackLayout Grid.Row="4" Orientation="Horizontal" HorizontalOptions="End" VerticalOptions="End" Margin="20" Spacing="8">
@@ -71,6 +70,9 @@
 
                     <!-- Buttons stacked to the right -->
                     <StackLayout Orientation="Vertical" Grid.Column="1" Grid.Row="0" Spacing="8">
+
+                        <Label x:Name="OnlineStatusLabel" Text="Online" TextColor="White" VerticalOptions="Center" />
+                        <Switch x:Name="OnlineSwitch" IsToggled="True" IsEnabled="True" Toggled="OnOnlineToggled" />
                         <Button Text="Add"
                                 Clicked="OnAddButtonClicked" />
                         <Button Text="Remove"
