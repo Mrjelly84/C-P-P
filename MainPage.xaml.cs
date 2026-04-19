@@ -2,8 +2,6 @@
 using AssetGuard.Services;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
-using System.IO; // Added necessary using statement for Path and FileSystem
-using System.Linq; // Added necessary using statement for Linq methods
 
 namespace AssetGuard
 {

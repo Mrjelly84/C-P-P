@@ -65,7 +65,7 @@ namespace AssetGuard.Services
                         return [];
 
                     var items = JsonSerializer.Deserialize<List<Item>>(txt, SerializerOptions);
-                    // Simplified null return check
+                    // Ensure we never return null
                     return items ?? [];
                 }
                 catch
@@ -75,7 +75,7 @@ namespace AssetGuard.Services
             }
             List<Item>? items1 = await WithRetriesAsync(async () =>
             {
-                // Use a relative URI (no leading slash) so BaseAddress path segment is preserved
+               
                 using var res = await http.GetAsync("items", ct);
                 if (!res.IsSuccessStatusCode)
                 {
@@ -83,9 +83,9 @@ namespace AssetGuard.Services
                     throw new HttpRequestException($"GET items failed: {(int)res.StatusCode} {res.ReasonPhrase} - {body}");
                 }
 
-                // Use the modern ReadFromJsonAsync<T>() pattern with optional cancellation
-                // We can also simplify the null check here.
+                
                 var items = await res.Content.ReadFromJsonAsync<List<Item>>(cancellationToken: ct);
+                
                 return items ?? [];
             });
             return items1;
