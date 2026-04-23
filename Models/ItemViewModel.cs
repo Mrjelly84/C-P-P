@@ -19,7 +19,7 @@ namespace AssetGuard.ViewModels
             _logService = logService;
         }
 
-        public void AddItem()
+        public virtual void AddItem()
         {
             if (!string.IsNullOrWhiteSpace(NewItemText))
             {
@@ -30,7 +30,7 @@ namespace AssetGuard.ViewModels
             }
         }
 
-        public void RemoveItem()
+        public  virtual void RemoveItem()
         {
             if (SelectedItem != null)
             {
@@ -41,7 +41,7 @@ namespace AssetGuard.ViewModels
             }
         }
 
-        public void RefreshItems()
+        public virtual void RefreshItems()
         {
             var list = _repository.LoadItems();
             Items.Clear();
