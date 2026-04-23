@@ -182,14 +182,19 @@ namespace AssetGuard
                 bool pushSucceeded = await _apiService.PushItemsAsync(localItems);
                 var serverItems = await _apiService.GetItemsAsync();
 
-                if (pushSucceeded && serverItems != null)
+                // Inside SyncWithServerAsync
+                if (pushSucceeded)
                 {
-                    // Basic merge logic
-                    _itemRepository.ReplaceAll(serverItems);
-                    _itemViewModel.RefreshItems();
-                }
+                    // Update the database records to state 0 (Synced)
+                    _itemRepository.UpdateSyncState(localItems, 0);
 
-                SyncStatusLabel.Text = string.Empty;
+                    // Reload the Items collection in the ViewModel from the database
+                    _itemViewModel.RefreshItems();
+
+                    _logService.LogAction($"User synced {localItems.Count} items.");
+
+                    SyncStatusLabel.Text = "Sync Complete";
+                }
             }
             catch (Exception ex)
             {

@@ -1,20 +1,36 @@
-using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace AssetGuard.Models
 {
-    public class Item
+    public class Item : INotifyPropertyChanged
     {
         public string Id { get; set; } = string.Empty;
         public string Detail { get; set; } = string.Empty;
         public DateTime LastModified { get; set; }
-        // 0 = Synced, 1 = LocalOnly, 2 = Modified
-        public int SyncState { get; set; } = 0;
 
-        public string SyncStatusText => SyncState switch
+        private int _syncState;
+        public int SyncState
         {
-            1 => "Local",
-            2 => "Modified",
-            _ => "Synced",
-        };
+            get => _syncState;
+            set
+            {
+                if (_syncState != value)
+                {
+                    _syncState = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(SyncStatusText)); // Updates the label text
+                }
+            }
+        }
+
+        // This property is what your XAML should bind to for the "Local/Synced" label
+        public string SyncStatusText => SyncState == 0 ? "Synced" : "Local";
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }

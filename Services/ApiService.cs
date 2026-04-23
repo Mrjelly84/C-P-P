@@ -20,7 +20,7 @@ namespace AssetGuard.Services
             this.baseUrl = baseUrl?.TrimEnd('/') ?? string.Empty;
             http = new HttpClient { BaseAddress = new Uri(this.baseUrl) };
 
-            // If no real API configured (placeholder), use a local file to emulate server
+            // use a local file to emulate server
             useMockServer = string.IsNullOrWhiteSpace(this.baseUrl) || this.baseUrl.Contains("example.com", StringComparison.OrdinalIgnoreCase);
             mockFilePath = Path.Combine(FileSystem.AppDataDirectory, "mock_server_items.json");
         }
