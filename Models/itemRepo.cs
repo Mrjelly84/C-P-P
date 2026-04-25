@@ -1,6 +1,5 @@
 ﻿using Microsoft.Data.Sqlite;
 using System.Collections.ObjectModel;
-using System.Data;
 
 namespace AssetGuard.Models
 {
