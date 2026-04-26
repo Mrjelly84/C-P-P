@@ -15,7 +15,7 @@
 
         public virtual void LogAction(string action)
         {
-            // If we are in a test and _logFilePath is null, don't try to write to a file
+            // If in a test and _logFilePath is null, don't try to write to a file
             if (string.IsNullOrEmpty(_logFilePath)) return;
 
             var logEntry = $"{DateTime.Now:dd-MM-yyyy HH:mm:ss} - {action}{Environment.NewLine}";
