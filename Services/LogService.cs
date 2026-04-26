@@ -4,7 +4,7 @@
     {
         private readonly string? _logFilePath;
 
-        // --- NEW: Empty constructor for Unit Testing/Moq ---
+        // Empty constructor for Unit Testing/Moq ---
         // This stops the test from crashing when trying to find a real file path
         public LogService() { }
 
