@@ -1,10 +1,13 @@
-﻿namespace AssetGuard.Services
+﻿using System;
+using System.IO;
+
+namespace AssetGuard.Services
 {
     public class LogService
     {
         private readonly string? _logFilePath;
 
-        // Empty constructor for Unit Testing/Moq ---
+        // --- NEW: Empty constructor for Unit Testing/Moq ---
         // This stops the test from crashing when trying to find a real file path
         public LogService() { }
 
@@ -15,7 +18,7 @@
 
         public virtual void LogAction(string action)
         {
-            // If in a test and _logFilePath is null, don't try to write to a file
+            // If we are in a test and _logFilePath is null, don't try to write to a file
             if (string.IsNullOrEmpty(_logFilePath)) return;
 
             var logEntry = $"{DateTime.Now:dd-MM-yyyy HH:mm:ss} - {action}{Environment.NewLine}";
