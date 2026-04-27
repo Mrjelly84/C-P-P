@@ -33,7 +33,7 @@ namespace AssetGuard
             var logFilePath = Path.Combine(FileSystem.AppDataDirectory, "useractions.log");
             _itemRepository = new ItemRepository(DbPath, "Items");
             _logService = new LogService(logFilePath);
-            _apiService = new ApiService(ApiBaseUrl);
+            _apiService = new ApiService(ApiBaseUrl, _logService);
 
             // Initialize ItemViewModel and link it to the UI
             _itemViewModel = new ItemViewModel(_itemRepository, _logService);
@@ -102,13 +102,13 @@ namespace AssetGuard
 
         #region Login/Logout Handling
 
-        // XAML Event Handler (Satisfies MAUIX2014)
+        // XAML Event Handler 
         public void OnLoginClicked(object sender, EventArgs e)
         {
             _ = OnLoginClickedAsync(sender, e);
         }
 
-        // Async Logic (Satisfies Unit Tests/CS4008)
+        // Async Logic (Satisfies Unit Tests)
         public async Task OnLoginClickedAsync(object sender, EventArgs e)
         {
             try
@@ -131,12 +131,12 @@ namespace AssetGuard
                 }
                 else
                 {
-                    await DisplayAlert("Error", "Invalid username or password.", "OK");
+                    await DisplayAlertAsync("Error", "Invalid username or password.", "OK");
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Login failed: {ex.Message}", "OK");
+                await DisplayAlertAsync("Error", $"Login failed: {ex.Message}", "OK");
             }
         }
 
