@@ -24,7 +24,7 @@ namespace AssetGuard.Models
             }
         }
 
-        // This property is what your XAML should bind to for the "Local/Synced" label
+        //  bind to for the "Local/Synced" label
         public string SyncStatusText => SyncState == 0 ? "Synced" : "Local";
 
         public event PropertyChangedEventHandler? PropertyChanged;
